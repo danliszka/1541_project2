@@ -18,10 +18,11 @@ unsigned int D_read_accesses = 0;
 unsigned int D_read_misses = 0;
 unsigned int D_write_accesses = 0; 
 unsigned int D_write_misses = 0;
+unsigned int L2_accesses = 0;
+unsigned int L2_misses = 0;
 
 #include "cache.h"
 
-#define HASHSIZE 32
 
 //Function prototype
 int hazardCheck(struct trace_item *a, struct trace_item *b, struct trace_item *c, struct trace_item *d, struct trace_item *e, struct trace_item *f, struct trace_item *g);
@@ -34,15 +35,6 @@ int main(int argc, char **argv)
   char *trace_file_name;
   int trace_view_on = 0;
   int prediction_type = 0;
-
-  //Initialize Hash Table with tag and predict value in that order
-  int hashTable[HASHSIZE][2];
-  int i;
-  for (i = 0; i < HASHSIZE; i++)
-  {
-    hashTable[i][0] = -1; //tag is -1
-    hashTable[i][1] = -1; //predict value is -1
-  }
 
   //Initialize NOP and Squash instuction
   struct trace_item NOP = {ti_NOP, 0, 0, 0, 0, 0};
@@ -132,14 +124,14 @@ int main(int argc, char **argv)
   unsigned int miss_penalty;
   unsigned int latency ;
 
-  fscanf(config_fd, "%d", &I_size);
-  fscanf(config_fd, "%d", &I_assoc);
-  fscanf(config_fd, "%d", &I_bsize);
-  fscanf(config_fd, "%d", &D_size);
-  fscanf(config_fd, "%d", &D_assoc);
-  fscanf(config_fd, "%d", &D_bsize);
-  fscanf(config_fd, "%d", &miss_penalty);
-  fscanf(config_fd, "%d", &latency);
+  fscanf(config_fd, "%u", &I_size);
+  fscanf(config_fd, "%u", &I_assoc);
+  fscanf(config_fd, "%u", &I_bsize);
+  fscanf(config_fd, "%u", &D_size);
+  fscanf(config_fd, "%u", &D_assoc);
+  fscanf(config_fd, "%u", &D_bsize);
+  fscanf(config_fd, "%u", &miss_penalty);
+  fscanf(config_fd, "%u", &latency);
 
   fclose(config_fd);
 
@@ -185,7 +177,16 @@ int main(int argc, char **argv)
       /* no more instructions (trace_items) to simulate */
       printf("+ Simulation terminates at cycle : %u\n", cycle_number);
       printf("squashed instructions: %d\n", squashCount);
-      printf("nops inserted: %d\n", nopCount);
+      printf("nops inserted: %d\n\n", nopCount);
+
+
+      unsigned int D_tot_accesses = D_read_accesses + D_write_accesses;
+      unsigned int D_tot_hits = D_tot_misses - (D_read_misses - D_write_misses);
+      unsigned int D_tot_misses = D_tot_accesses - D_tot_hits;
+
+      printf("L1 Data cache:          [%u] accesses, [%u] hits, [%u] misses, [%u] miss rate\n", D_tot_accesses, D_tot_hits, D_tot_misses, (D_tot_misses/D_tot_accesses));
+      printf("L1 Instruction cache:   [%u] accesses, [%u] hits, [%u] misses, [%u] miss rate\n", I_accesses, (I_accesses - I_misses), I_misses, (I_misses/I_accesses));
+      printf("L2 cache:               [%u] accesses, [%u] hits, [%u] misses, [%u] miss rate\n", L2_accesses, (L2_accesses - L2_misses), L2_misses, (L2_misses/L2_accesses));
       break;
     }
     else
@@ -220,162 +221,7 @@ int main(int argc, char **argv)
           }
 
 
-          // 1-bit prediction
-          else if (prediction_type == 1)
-          {
-            //Checks if it was the same branch instruction. If it wasn't, there is a loss of memory and we implement "not taken" policy
-            if (hashTable[hashIndex][0] != tag)
-            {
-              hashTable[hashIndex][1] = -1;
-            }
-
-            if (hashTable[hashIndex][1] == -1 || hashTable[hashIndex][1] == 0) //no prediction yet or predict not taken, either way use "not taken" policy
-            {
-              if (EX->Addr == ID->PC) //prediction wrong, branch taken
-              {
-                //update hash table
-                hashTable[hashIndex][1] = 1;
-                hashTable[hashIndex][0] = tag;
-
-                //squash instructions
-                insertSquash = 3;
-                foundControlHazard = 1;
-              }
-              else //prediction correct, branch not taken
-              {
-                //update hash table
-                hashTable[hashIndex][1] = 0;
-                hashTable[hashIndex][0] = tag;
-              }
-            }
-            else if (hashTable[hashIndex][1] == 1) 
-            {
-              if (EX->Addr == ID->PC) //prediction correct, branch taken
-              {
-                //update hash table
-                hashTable[hashIndex][1] = 1;
-                hashTable[hashIndex][0] = tag;
-              }
-              else //prediction wrong, branch not taken
-              {
-                //update hash table
-                hashTable[hashIndex][1] = 0; 
-                hashTable[hashIndex][0] = tag;
-
-                //squash instructions
-                insertSquash = 3;
-                foundControlHazard = 1;
-              }
-            }
-          }
-
-
-          // 2-bit prediction
-          else if (prediction_type == 2)
-          {
-            //Checks if it was the same branch instruction. If it wasn't, there is a loss of memory and we implement "not taken" policy
-            if (hashTable[hashIndex][0] != tag)
-            {
-              hashTable[hashIndex][1] = -1;
-            }
-
-            if (hashTable[hashIndex][1] == -1) //"not taken policy"
-            {
-              if (EX->Addr == ID->PC) //prediction wrong, branch taken
-              {
-                //update hash table
-                hashTable[hashIndex][1] = 1;
-                hashTable[hashIndex][0] = tag;
-
-                //squash instructions
-                insertSquash = 3;
-                foundControlHazard = 1;
-              }
-              else //prediction correct, branch not taken
-              {
-                //update hash table
-                hashTable[hashIndex][1] = 0;
-                hashTable[hashIndex][0] = tag;
-              }
-            }
-            else
-            {
-              if (hashTable[hashIndex][1] == 0)
-              {
-                if (EX->Addr == ID->PC) //prediction wrong, branch taken
-                {
-                  //update hash table
-                  hashTable[hashIndex][1] = 1;
-                  hashTable[hashIndex][0] = tag;
-
-                  //squash instructions
-                  insertSquash = 3;
-                  foundControlHazard = 1;
-                }
-                else //prediction correct, branch not taken
-                {
-                  hashTable[hashIndex][1] = 0;
-                  hashTable[hashIndex][0] = tag;
-                }
-              }
-              else if (hashTable[hashIndex][1] == 1)
-              {
-                if (EX->Addr == ID->PC) //prediction wrong, branch taken
-                {
-                  //update hash table
-                  hashTable[hashIndex][1] = 3;
-                  hashTable[hashIndex][0] = tag;
-
-                  //squash instructions
-                  insertSquash = 3;
-                  foundControlHazard = 1;
-                }
-                else //prediction correct, branch not taken
-                {
-                  hashTable[hashIndex][1] = 0;
-                  hashTable[hashIndex][0] = tag;
-                }
-              }
-              else if (hashTable[hashIndex][1] == 2)
-              {
-                if (EX->Addr == ID->PC) //prediction correct, branch taken
-                {
-                  //update hash table
-                  hashTable[hashIndex][1] = 3;
-                  hashTable[hashIndex][0] = tag;
-                }
-                else //prediction wrong, branch not taken
-                {
-                  //update hash table
-                  hashTable[hashIndex][1] = 0;
-                  hashTable[hashIndex][0] = tag;
-
-                  //squash instructions
-                  insertSquash = 3;
-                  foundControlHazard = 1;
-                }
-              }
-              else if (hashTable[hashIndex][1] == 3)
-              {
-                if (EX->Addr == ID->PC) //prediction correct, branch taken
-                {
-                  //update hash table
-                  hashTable[hashIndex][1] = 3;
-                  hashTable[hashIndex][0] = tag;
-                }
-                else //prediction wrong, branch not taken
-                {
-                  //update hash table
-                  hashTable[hashIndex][1] = 2;
-                  hashTable[hashIndex][0] = tag;
-
-                  //squash instructions
-                  insertSquash = 3;
-                  foundControlHazard = 1;
-                }
-              }
-            }
-          }
+          //We are not going to have other prediction types so I deleted the code to handle those
         }
 
         
