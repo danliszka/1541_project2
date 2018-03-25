@@ -63,9 +63,7 @@ int main(int argc, char **argv)
     fprintf(stdout, "\nUSAGE: tv <trace_file> <switch - any character>\n");
     fprintf(stdout, "\n(switch) to turn on or off individual item view.\n\n");
     exit(0);
-  }
-
-
+  }-
 
 
   //--------Modifying so when a trace view and/or prediction type is not specified, it automatically goes to zero.
@@ -117,25 +115,60 @@ int main(int argc, char **argv)
 
   unsigned int I_size; 
   unsigned int I_assoc;
-  unsigned int I_bsize;
   unsigned int D_size;
   unsigned int D_assoc;
-  unsigned int D_bsize;
-  unsigned int miss_penalty;
-  unsigned int latency ;
+  unsigned int L2_size;
+  unsigned int L2_assoc;
+  unsigned int block_size; //in bytes
+  unsigned int L1_miss_penalty; //in cycles
+  unsigned int L2_miss_penalty; //in cycles
 
   fscanf(config_fd, "%u", &I_size);
   fscanf(config_fd, "%u", &I_assoc);
-  fscanf(config_fd, "%u", &I_bsize);
   fscanf(config_fd, "%u", &D_size);
   fscanf(config_fd, "%u", &D_assoc);
-  fscanf(config_fd, "%u", &D_bsize);
-  fscanf(config_fd, "%u", &miss_penalty);
-  fscanf(config_fd, "%u", &latency);
+  fscanf(config_fd, "%u", &L2_size);
+  fscanf(config_fd, "%u", &L2_assoc);
+  fscanf(config_fd, "%u", &block_size);
+  fscanf(config_fd, "%u", &L1_miss_penalty);
+  fscanf(config_fd, "%u", &L2_miss_penalty);
 
   fclose(config_fd);
 
+  //-------end opening configuration file
+
+
+
+
+  //-------configuration of caches
+
+  unsigned int index_amount;
+
+  // initialize L1 Instruction cache
+  if (I_size > 0)
+  {
+    index_amount = (I_size * 1000)/I_assoc;
+    int L1_I_CACHE[index_amount][I_assoc];
+  }
+  
+  // initialize L1 Data cache
+  if (D_size > 0)
+  {
+    index_amount = (D_size * 1000)/D_assoc;
+    int L1_D_CACHE[index_amount][D_assoc];
+  }
+  
+  // initialize L2 cache
+  if (L2_size > 0)
+  {
+    index_amount = (L2_size * 1000)/L2_assoc;
+    int L2_CACHE[index_amount][L2_assoc];
+  }
+
+
   //-------end configuration
+
+
 
 
   //--------Opening simulation file and getting started
@@ -178,7 +211,6 @@ int main(int argc, char **argv)
       printf("+ Simulation terminates at cycle : %u\n", cycle_number);
       printf("squashed instructions: %d\n", squashCount);
       printf("nops inserted: %d\n\n", nopCount);
-
 
       unsigned int D_tot_accesses = D_read_accesses + D_write_accesses;
       unsigned int D_tot_hits = D_tot_misses - (D_read_misses - D_write_misses);
