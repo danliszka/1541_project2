@@ -63,7 +63,7 @@ int main(int argc, char **argv)
     fprintf(stdout, "\nUSAGE: tv <trace_file> <switch - any character>\n");
     fprintf(stdout, "\n(switch) to turn on or off individual item view.\n\n");
     exit(0);
-  }-
+  }
 
 
   //--------Modifying so when a trace view and/or prediction type is not specified, it automatically goes to zero.
@@ -213,7 +213,7 @@ int main(int argc, char **argv)
       printf("nops inserted: %d\n\n", nopCount);
 
       unsigned int D_tot_accesses = D_read_accesses + D_write_accesses;
-      unsigned int D_tot_hits = D_tot_misses - (D_read_misses - D_write_misses);
+      unsigned int D_tot_hits = D_tot_accesses - (D_read_misses - D_write_misses);
       unsigned int D_tot_misses = D_tot_accesses - D_tot_hits;
 
       printf("L1 Data cache:          [%u] accesses, [%u] hits, [%u] misses, [%u] miss rate\n", D_tot_accesses, D_tot_hits, D_tot_misses, (D_tot_misses/D_tot_accesses));
@@ -236,13 +236,13 @@ int main(int argc, char **argv)
         //Check if there is a control hazard and update hash table if branch
         if (EX->type == ti_BRANCH)
         {
-          //Get hash index
-          hashIndex = EX->PC;
-          hashIndex = hashIndex >> 3;
-          hashIndex = hashIndex % HASHSIZE;
-          //Calculate hash tag
-          tag = EX->PC;
-          tag = tag/HASHSIZE;
+          // //Get hash index
+          // hashIndex = EX->PC;
+          // hashIndex = hashIndex >> 3;
+          // hashIndex = hashIndex % HASHSIZE;
+          // //Calculate hash tag
+          // tag = EX->PC;
+          // tag = tag/HASHSIZE;
 
           // No prediction
           if (prediction_type == 0 && EX->Addr == ID->PC) //predicted wrong, branch taken 

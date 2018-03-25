@@ -49,7 +49,8 @@ for (k=0 ; k< cp->assoc ; k++)
   if(cp->blocks[index][k].LRU < cp->blocks[index][way].LRU) 
      cp->blocks[index][k].LRU = cp->blocks[index][k].LRU + 1 ;
 }
-cp->blocks[index][way].LRU = 0 ;
+  cp->blocks[index][way].LRU = 0 ;
+  return 0;
 }
 
 int cache_access(struct cache_t *cp, unsigned long address, int access_type /*0 for read, 1 for write*/)
