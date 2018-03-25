@@ -87,11 +87,23 @@ int main(int argc, char **argv)
   {
 	  prediction_type = atoi(argv[2]);
 	  trace_view_on = 0;
+
+    if (prediction_type != 0)
+    {
+      printf("\nprediction type can only be 0 in this simulation");
+      prediction_type = 0;
+    }
   }
   else if (argc == 4) //follows order requirement
   {
 	  trace_view_on = atoi(argv[3]);
 	  prediction_type = atoi(argv[2]);
+
+    if (prediction_type != 0)
+    {
+      printf("\nprediction type can only be 0 in this simulation");
+      prediction_type = 0;
+    }
   }
   else
   {
@@ -103,8 +115,35 @@ int main(int argc, char **argv)
 
 
   //------Opening configuration file 
+  FILE *config_fd;
+  config_fd = fopen("cache_config.txt", "rb");
 
+  if (!config_fd) {
+    fprintf(stdout, "\ntrace file cache_config.txt not opened.\n\n");
+    exit(0);
+  }
 
+  unsigned int I_size; 
+  unsigned int I_assoc;
+  unsigned int I_bsize;
+  unsigned int D_size;
+  unsigned int D_assoc;
+  unsigned int D_bsize;
+  unsigned int miss_penalty;
+  unsigned int latency ;
+
+  fscanf(config_fd, "%d", &I_size);
+  fscanf(config_fd, "%d", &I_assoc);
+  fscanf(config_fd, "%d", &I_bsize);
+  fscanf(config_fd, "%d", &D_size);
+  fscanf(config_fd, "%d", &D_assoc);
+  fscanf(config_fd, "%d", &D_bsize);
+  fscanf(config_fd, "%d", &miss_penalty);
+  fscanf(config_fd, "%d", &latency);
+
+  fclose(config_fd);
+
+  //-------end configuration
 
 
   //--------Opening simulation file and getting started
