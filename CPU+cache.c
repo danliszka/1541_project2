@@ -11,6 +11,16 @@
 #include <arpa/inet.h>
 #include "CPU.h"
 
+// to keep cache statistics
+unsigned int I_accesses = 0;
+unsigned int I_misses = 0;
+unsigned int D_read_accesses = 0;
+unsigned int D_read_misses = 0;
+unsigned int D_write_accesses = 0; 
+unsigned int D_write_misses = 0;
+
+#include "cache.h"
+
 #define HASHSIZE 32
 
 //Function prototype
@@ -20,6 +30,10 @@ int hazardCheck(struct trace_item *a, struct trace_item *b, struct trace_item *c
 int main(int argc, char **argv)
 {
   struct trace_item *tr_entry;
+  size_t size;
+  char *trace_file_name;
+  int trace_view_on = 0;
+  int prediction_type = 0;
 
   //Initialize Hash Table with tag and predict value in that order
   int hashTable[HASHSIZE][2];
@@ -43,12 +57,7 @@ int main(int argc, char **argv)
   struct trace_item *MEM2 = &NOP;
   struct trace_item *WB = &NOP;
 
-
-  size_t size;
-  char *trace_file_name;
-  int trace_view_on = 0;
-  int prediction_type = 0;
-
+  //Initialize instruction pieces
   unsigned char t_type = 0;
   unsigned char t_sReg_a= 0;
   unsigned char t_sReg_b= 0;
@@ -63,6 +72,9 @@ int main(int argc, char **argv)
     fprintf(stdout, "\n(switch) to turn on or off individual item view.\n\n");
     exit(0);
   }
+
+
+
 
   //--------Modifying so when a trace view and/or prediction type is not specified, it automatically goes to zero.
   trace_file_name = argv[1];
@@ -90,9 +102,12 @@ int main(int argc, char **argv)
 
 
 
+  //------Opening configuration file 
 
 
-  //--------Opening file and getting started
+
+
+  //--------Opening simulation file and getting started
   fprintf(stdout, "\n ** opening file %s\n", trace_file_name);
 
   trace_fd = fopen(trace_file_name, "rb");
