@@ -243,14 +243,14 @@ int main(int argc, char **argv)
       if (I_size > 0)
       {
         if (L2_size > 0)
-          L1_I_penalty = cache_access(L1_I_CACHE, (unsigned long) IF1->PC, 0, L2_CACHE);
+          L1_I_penalty = cache_access(L1_I_CACHE, (unsigned long) IF1->PC, 0, L2_CACHE, NULL);
         else
-          L1_I_penalty = cache_access(L1_I_CACHE, (unsigned long) IF1->PC, 0, NULL);
+          L1_I_penalty = cache_access(L1_I_CACHE, (unsigned long) IF1->PC, 0, NULL, NULL);
 
         if (L1_I_penalty > 0 && L2_size > 0) //there was an L1 miss and we have an L2 cache
         {
           I_misses++;
-          L2_penalty = cache_access(L2_CACHE, (unsigned long)IF1->PC, 0, NULL);
+          L2_penalty = cache_access(L2_CACHE, (unsigned long)IF1->PC, 0, NULL, L1_I_CACHE);
           if (L2_penalty > 0) //there was an L2 miss
           {
             L2_misses++;
@@ -275,14 +275,14 @@ int main(int argc, char **argv)
         if (D_size > 0)
         {
           if (L2_size > 0)//we have L2 cache
-            L1_D_penalty = cache_access(L1_D_CACHE, (unsigned long) MEM1->Addr, 0, L2_CACHE);
+            L1_D_penalty = cache_access(L1_D_CACHE, (unsigned long) MEM1->Addr, 0, L2_CACHE, NULL);
           else
-            L1_D_penalty = cache_access(L1_D_CACHE, (unsigned long) MEM1->Addr, 0, NULL);
+            L1_D_penalty = cache_access(L1_D_CACHE, (unsigned long) MEM1->Addr, 0, NULL, NULL);
 
           if (L1_D_penalty > 0 && L2_size > 0) //read miss on L1 and we have L2
           {
             D_read_misses++;
-            L2_penalty = cache_access(L2_CACHE, (unsigned long) MEM1->Addr, 0, NULL);
+            L2_penalty = cache_access(L2_CACHE, (unsigned long) MEM1->Addr, 0, NULL, L1_D_CACHE);
             if (L2_penalty > 0) //L2 cache miss
             {
               L2_misses++;
@@ -301,14 +301,14 @@ int main(int argc, char **argv)
         if (D_size > 0)
         {
           if (L2_CACHE > 0)//we have L2 cache
-            L1_D_penalty = cache_access(L1_D_CACHE, (unsigned long) MEM1->Addr, 1, L2_CACHE);
+            L1_D_penalty = cache_access(L1_D_CACHE, (unsigned long) MEM1->Addr, 1, L2_CACHE, NULL);
           else
-            L1_D_penalty = cache_access(L1_D_CACHE, (unsigned long) MEM1->Addr, 1, NULL);
+            L1_D_penalty = cache_access(L1_D_CACHE, (unsigned long) MEM1->Addr, 1, NULL, NULL);
 
           if (L1_D_penalty > 0 && L2_size > 0)//write miss on L1 and we have L2
           {
             D_write_misses++;
-            L2_penalty = cache_access(L2_CACHE, (unsigned long) MEM1->Addr, 1, NULL);
+            L2_penalty = cache_access(L2_CACHE, (unsigned long) MEM1->Addr, 1, NULL, L1_D_CACHE);
             if (L2_penalty > 0) //L2 cache miss
             {
               L2_misses++;

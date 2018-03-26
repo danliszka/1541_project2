@@ -76,17 +76,39 @@ int update_inHigherCache(struct cache_t *cp, unsigned long address, char value)
   }
 
   return 1; //error, block not found
-
 }
 
-int cache_access(struct cache_t *cp, unsigned long address, int access_type /*0 for read, 1 for write*/, struct cache_t *L2cp)
+int evict_block(struct cache_t *cp, unsigned long address)
+{
+  int way, block_address, index, tag, latency ;
+  latency = 0;
+
+  block_address = (address / cp->blocksize);
+  tag = block_address / cp->nsets;
+  index = block_address - (tag * cp->nsets) ;
+
+  for (way = 0 ; way < cp->assoc ; way++)
+  {
+    if (cp->blocks[index][way].tag == tag && cp->blocks[index][way].valid == 1)
+    {
+      if (cp->blocks[index][way].dirty == 1)/*if has to write back*/
+        latency += cp->mem_latency;
+
+      cp->blocks[index][way].valid = 0;
+      return latency;
+    }
+  }
+  return latency; //block not found
+}
+
+int cache_access(struct cache_t *cp, unsigned long address, int access_type /*0 for read, 1 for write*/, struct cache_t *L2cp, struct cache_t *L1cp)
 {
   int i,latency ;
   int block_address ;
   int index;
   int tag;
-  int way ;
-  int max ;
+  int way, backup_way ;
+  int max, backup_max ;
 
   block_address = (address / cp->blocksize);
   tag = block_address / cp->nsets;
@@ -127,19 +149,34 @@ int cache_access(struct cache_t *cp, unsigned long address, int access_type /*0 
   }
 
   //for when they are all valid, execute below
-   max = cp->blocks[index][0].LRU ;	/* find the LRU block */
-   way = 0 ;
-   int all_in_higher_cache = 0;
-   for (i=1 ; i< cp->assoc ; i++){ 
-    if (cp->blocks[index][i].LRU > max) //!!!!!!! -- Still need to figure out what to do if all blocks are in L1 as well as L2
+  max = cp->blocks[index][0].LRU ;	/* find the LRU block */
+  way = 0 ;
+
+  backup_max = max;/* These will be used if all blocks are in L1 as well as L2 and we have to evict from both */
+  backup_way = way;
+
+  int num_in_higher_cache = 0;
+  for (i=1 ; i< cp->assoc ; i++)
+  { 
+    if (cp->blocks[index][i].LRU > max) 
     {
+
       if (cp->cache_type == 2) //if we are in L2, check if this block is also in L1
       {
-        if (cp->blocks[index][i].in_higher_cache == 0) //if its not in L2, then allow it to have the chance to be evicted
+
+        if (cp->blocks[index][i].in_higher_cache == 0) //if its not also in L1, then allow it to have the chance to be evicted
         {
           max = cp->blocks[index][i].LRU ;
           way = i ;
         }
+        else
+        {
+          num_in_higher_cache++;
+        }
+
+        backup_max = cp->blocks[index][i].LRU;
+        backup_way = i;
+
       }
       else if (cp->cache_type == 1)
       {
@@ -149,11 +186,18 @@ int cache_access(struct cache_t *cp, unsigned long address, int access_type /*0 
 
     }
   }
+
+  /* if all the blocks in this index are also in L1 so we have to evict LRU for L2 in both caches */
+  if (num_in_higher_cache == cp->assoc && cp->cache_type == 2)
+  {
+    latency += evict_block(L1cp, address);
+    way = backup_way;
+  }
+
   if (cp->blocks[index][way].dirty == 1)  
   	latency = latency + cp->mem_latency;	/* for writing back the evicted block */
   
   latency = latency + cp->mem_latency;		/* for reading the block from memory*/
-  				/* should instead write to and/or read from L2, in case you have an L2 */
 
   if (cp->cache_type == 1 && L2cp != NULL) //we are in L1 and there is an L2 available
   {
@@ -162,6 +206,9 @@ int cache_access(struct cache_t *cp, unsigned long address, int access_type /*0 
     if (error)
       printf("\nERROR: could not find block in L2 cache to update\n");
   }
+  
+  if (cp->cache_type == 2)//we are in L2 and we need to make sure the inclusive bit is 1
+    cp->blocks[index][way].in_higher_cache = 1 ;
 
   cp->blocks[index][way].tag = tag ;
   updateLRU(cp, index, way) ;
