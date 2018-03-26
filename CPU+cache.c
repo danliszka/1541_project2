@@ -340,13 +340,18 @@ int main(int argc, char **argv)
       {
 
         //Check if there is a control hazard
-        if (EX->type == ti_BRANCH || EX->type == ti_JTYPE)
+        if (EX->type == ti_BRANCH || EX->type == ti_JRTYPE)
         {
 
           // No prediction
-          if (prediction_type == 0 && EX->Addr == ID->PC) //predicted wrong, branch taken 
+          if (prediction_type == 0 && EX->Addr == ID->PC && EX->type == ti_BRANCH) //predicted wrong, branch taken 
           {
             //Squash intstructions
+            insertSquash = 3;
+            foundControlHazard = 1;
+          }
+          else if(EX->type == ti_JRTYPE)
+          {
             insertSquash = 3;
             foundControlHazard = 1;
           }
