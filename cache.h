@@ -60,17 +60,17 @@ int update_inHigherCache(struct cache_t *cp, unsigned long address, char value)
   if (value != 0 && value != 1)
     return 1; //invalid input
 
-  int way, block_address, index ;
+  int way, block_address, index, tag ;
 
   block_address = (address / cp->blocksize);
   tag = block_address / cp->nsets;
   index = block_address - (tag * cp->nsets) ;
 
-  for (way = 0 ; i < cp->assoc ; way++)
+  for (way = 0 ; way < cp->assoc ; way++)
   {
     if (cp->blocks[index][way].tag == tag && cp->blocks[index][way].valid == 1)
     {
-      cp->blocks[index][i].in_higher_cache = value;
+      cp->blocks[index][way].in_higher_cache = value;
       return 0;
     }
   }
@@ -135,7 +135,7 @@ int cache_access(struct cache_t *cp, unsigned long address, int access_type /*0 
     {
       if (cp->cache_type == 2) //if we are in L2, check if this block is also in L1
       {
-        if (cp->blocks[index][i] == 0) //if its not in L2, then allow it to have the chance to be evicted
+        if (cp->blocks[index][i].in_higher_cache == 0) //if its not in L2, then allow it to have the chance to be evicted
         {
           max = cp->blocks[index][i].LRU ;
           way = i ;
