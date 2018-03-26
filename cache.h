@@ -203,10 +203,12 @@ int cache_access(struct cache_t *cp, unsigned long address, int access_type /*0 
   {
     //since we are in L1 and are about to evict, we need to make sure the same block in L2 does not say its in L1 anymore
     int error = update_inHigherCache(L2cp, address, 0);
-    if (error)
-      printf("\nERROR: could not find block in L2 cache to update\n");
+    // if (error)
+    //   printf("\nERROR: could not find block in L2 cache to update\n");
+    // else
+    //   printf("\nIT WORKED\n");
   }
-  
+
   if (cp->cache_type == 2)//we are in L2 and we need to make sure the inclusive bit is 1
     cp->blocks[index][way].in_higher_cache = 1 ;
 

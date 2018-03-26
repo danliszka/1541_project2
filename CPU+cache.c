@@ -140,16 +140,12 @@ int main(int argc, char **argv)
 
 
 
-
   //-------configuration of caches
 
   struct cache_t *L1_I_CACHE;
   struct cache_t *L1_D_CACHE;
   struct cache_t *L2_CACHE;
 
-  L1_I_CACHE->cache_type = 1;
-  L1_D_CACHE->cache_type = 1;
-  L2_CACHE->cache_type = 2;
 
   // initialize L1 Instruction cache
   if (I_size > 0 && L2_size > 0)
@@ -157,18 +153,24 @@ int main(int argc, char **argv)
   else if (I_size > 0 && L2_size == 0)
     L1_I_CACHE = cache_create(I_size, block_size, I_assoc, memory_access_time);
   
+  fflush(stdout);
   // initialize L1 Data cache
   if (D_size > 0 && L2_size > 0)
     L1_D_CACHE = cache_create(D_size, block_size, D_assoc, L2_access_time);
   else if (D_size > 0 && L2_size == 0)
     L1_D_CACHE = cache_create(D_size, block_size, D_assoc, memory_access_time);
 
+  fflush(stdout);
   // initialize L2 cache
   if (L2_size > 0)
     L2_CACHE = cache_create(L2_size, block_size, L2_assoc, memory_access_time);
 
-  //-------end configuration
+  L1_I_CACHE->cache_type = 1;
+  L1_D_CACHE->cache_type = 1;
+  if (L2_size > 0)
+    L2_CACHE->cache_type = 2;
 
+  //-------end configuration
 
 
 
@@ -217,12 +219,14 @@ int main(int argc, char **argv)
       printf("nops inserted: %d\n\n", nopCount);
 
       unsigned int D_tot_accesses = D_read_accesses + D_write_accesses;
-      unsigned int D_tot_hits = D_tot_accesses - (D_read_misses - D_write_misses);
-      unsigned int D_tot_misses = D_tot_accesses - D_tot_hits;
+      unsigned int D_tot_hits = D_tot_accesses - (D_read_misses + D_write_misses);
+      unsigned int D_tot_misses = D_read_misses + D_write_misses;
 
-      printf("L1 Data cache:          [%u] accesses, [%u] hits, [%u] misses, [%u] miss rate\n", D_tot_accesses, D_tot_hits, D_tot_misses, (D_tot_misses/D_tot_accesses));
-      printf("L1 Instruction cache:   [%u] accesses, [%u] hits, [%u] misses, [%u] miss rate\n", I_accesses, (I_accesses - I_misses), I_misses, (I_misses/I_accesses));
-      printf("L2 cache:               [%u] accesses, [%u] hits, [%u] misses, [%u] miss rate\n", L2_accesses, (L2_accesses - L2_misses), L2_misses, (L2_misses/L2_accesses));
+
+      printf("L1 Data cache:          [%u] accesses,  [%u] hits,  [%u] misses,  [%lf%%] miss rate\n", D_tot_accesses, D_tot_hits, D_tot_misses, (double)((double)D_tot_misses*100/(double)D_tot_accesses));
+      printf("L1 Instruction cache:   [%u] accesses,  [%u] hits,  [%u] misses,  [%lf%%] miss rate\n", I_accesses, (I_accesses - I_misses), I_misses, (double)((double)I_misses*100/(double)I_accesses));
+      if (L2_size > 0)
+        printf("L2 cache:               [%u] accesses,  [%u] hits,  [%u] misses,  [%lf%%] miss rate\n", L2_accesses, (L2_accesses - L2_misses), L2_misses, (double)((double)L2_misses*100)/(double)L2_accesses);
       break;
     }
     else
@@ -250,11 +254,11 @@ int main(int argc, char **argv)
         if (L1_I_penalty > 0 && L2_size > 0) //there was an L1 miss and we have an L2 cache
         {
           I_misses++;
+          L2_accesses++;
           L2_penalty = cache_access(L2_CACHE, (unsigned long)IF1->PC, 0, NULL, L1_I_CACHE);
           if (L2_penalty > 0) //there was an L2 miss
           {
             L2_misses++;
-            //update that we have instruction also in L1
           }
         }
         else if (L1_I_penalty > 0 && L2_size == 0)
@@ -282,6 +286,7 @@ int main(int argc, char **argv)
           if (L1_D_penalty > 0 && L2_size > 0) //read miss on L1 and we have L2
           {
             D_read_misses++;
+            L2_accesses++;
             L2_penalty = cache_access(L2_CACHE, (unsigned long) MEM1->Addr, 0, NULL, L1_D_CACHE);
             if (L2_penalty > 0) //L2 cache miss
             {
@@ -308,6 +313,7 @@ int main(int argc, char **argv)
           if (L1_D_penalty > 0 && L2_size > 0)//write miss on L1 and we have L2
           {
             D_write_misses++;
+            L2_accesses++;
             L2_penalty = cache_access(L2_CACHE, (unsigned long) MEM1->Addr, 1, NULL, L1_D_CACHE);
             if (L2_penalty > 0) //L2 cache miss
             {
