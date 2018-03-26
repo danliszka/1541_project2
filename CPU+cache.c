@@ -21,6 +21,7 @@ unsigned int D_write_misses = 0;
 unsigned int L2_accesses = 0;
 unsigned int L2_misses = 0;
 
+
 #include "cache.h"
 
 
@@ -120,8 +121,8 @@ int main(int argc, char **argv)
   unsigned int L2_size;
   unsigned int L2_assoc;
   unsigned int block_size; //in bytes
-  unsigned int L1_miss_penalty; //in cycles
-  unsigned int L2_miss_penalty; //in cycles
+  unsigned int L2_access_time; //in cycles
+  unsigned int memory_access_time; //in cycles
 
   fscanf(config_fd, "%u", &I_size);
   fscanf(config_fd, "%u", &I_assoc);
@@ -130,8 +131,8 @@ int main(int argc, char **argv)
   fscanf(config_fd, "%u", &L2_size);
   fscanf(config_fd, "%u", &L2_assoc);
   fscanf(config_fd, "%u", &block_size);
-  fscanf(config_fd, "%u", &L1_miss_penalty);
-  fscanf(config_fd, "%u", &L2_miss_penalty);
+  fscanf(config_fd, "%u", &L2_access_time);
+  fscanf(config_fd, "%u", &memory_access_time);
 
   fclose(config_fd);
 
@@ -142,29 +143,29 @@ int main(int argc, char **argv)
 
   //-------configuration of caches
 
-  unsigned int index_amount;
+  struct cache_t *L1_I_CACHE;
+  struct cache_t *L1_D_CACHE;
+  struct cache_t *L2_CACHE;
+
+  L1_I_CACHE->cache_type = 1;
+  L1_D_CACHE->cache_type = 1;
+  L2_CACHE->cache_type = 2;
 
   // initialize L1 Instruction cache
-  if (I_size > 0)
-  {
-    index_amount = (I_size * 1000)/I_assoc;
-    int L1_I_CACHE[index_amount][I_assoc];
-  }
+  if (I_size > 0 && L2_size > 0)
+    L1_I_CACHE = cache_create(I_size, block_size, I_assoc, L2_access_time);
+  else if (I_size > 0 && L2_size == 0)
+    L1_I_CACHE = cache_create(I_size, block_size, I_assoc, memory_access_time);
   
   // initialize L1 Data cache
-  if (D_size > 0)
-  {
-    index_amount = (D_size * 1000)/D_assoc;
-    int L1_D_CACHE[index_amount][D_assoc];
-  }
-  
+  if (D_size > 0 && L2_size > 0)
+    L1_D_CACHE = cache_create(D_size, block_size, D_assoc, L2_access_time);
+  else if (D_size > 0 && L2_size == 0)
+    L1_D_CACHE = cache_create(D_size, block_size, D_assoc, memory_access_time);
+
   // initialize L2 cache
   if (L2_size > 0)
-  {
-    index_amount = (L2_size * 1000)/L2_assoc;
-    int L2_CACHE[index_amount][L2_assoc];
-  }
-
+    L2_CACHE = cache_create(L2_size, block_size, L2_assoc, memory_access_time);
 
   //-------end configuration
 
@@ -195,6 +196,9 @@ int main(int argc, char **argv)
   int nopCount = 0;
   int foundControlHazard = 0;
   int insertSquash = 0;
+  int L1_I_penalty = 0;
+  int L1_D_penalty = 0;
+  int L2_penalty = 0;
 
   //execute first cycle
   size = trace_get_item(&tr_entry);
@@ -228,21 +232,99 @@ int main(int argc, char **argv)
         //Allows the pipeline to coninute to execute the rest of the instructions even though there are no more coming in
         remaining--;
       }
+
+      //check for memory in caches----------------------------
+      L1_I_penalty = 0;
+      L1_D_penalty = 0;
+      L2_penalty = 0;
+
+      //Start with Instruction memory
+      I_accesses++;
+      if (I_size > 0)
+      {
+        L1_I_penalty = cache_access(L1_I_CACHE, (unsigned long) IF1->PC, 0);
+
+        if (L1_I_penalty > 0 && L2_size > 0) //there was an L1 miss and we have an L2 cache
+        {
+          I_misses++;
+          L2_penalty = cache_access(L2_CACHE, (unsigned long)IF1->PC, 0);
+          if (L2_penalty > 0) //there was an L2 miss
+          {
+            L2_misses++;
+            //update that we have instruction also in L1
+          }
+        }
+        else if (L1_I_penalty > 0 && L2_size == 0)
+        {
+          I_misses++;
+        }
+      }
+
+      cycle_number += (L1_I_penalty + L2_penalty);
+      L1_I_penalty = 0;
+      L2_penalty = 0;
+
+
+      //Next Data memory
+      if (MEM1->type == ti_LOAD) //if LOAD instruction
+      {
+        D_read_accesses++;
+        if (D_size > 0)
+        {
+          L1_D_penalty = cache_access(L1_D_CACHE, (unsigned long) MEM1->Addr, 0);
+
+          if (L1_D_penalty > 0 && L2_size > 0) //read miss on L1 and we have L2
+          {
+            D_read_misses++;
+            L2_penalty = cache_access(L2_CACHE, (unsigned long) MEM1->Addr, 0);
+            if (L2_penalty > 0) //L2 cache miss
+            {
+              L2_misses++;
+            }
+          }
+          else if (L1_D_penalty > 0 && L2_size == 0)
+          {
+            D_read_misses++;
+          }
+        }
+      }
+
+      else if (MEM1->type == ti_STORE) //if STORE instruction
+      {
+        D_write_accesses++;
+        if (D_size > 0)
+        {
+          L1_D_penalty = cache_access(L1_D_CACHE, (unsigned long) MEM1->Addr, 1);
+
+          if (L1_D_penalty > 0 && L2_size > 0)//write miss on L1 and we have L2
+          {
+            D_write_misses++;
+            L2_penalty = cache_access(L2_CACHE, (unsigned long) MEM1->Addr, 1);
+            if (L2_penalty > 0) //L2 cache miss
+            {
+              L2_misses++;
+            }
+          }
+          else if (L1_D_penalty > 0 && L2_size == 0)
+          {
+            D_write_misses++;
+          }
+        }
+      }
+
+
+
+
+      //-------End memory checking in caches
+
       
       //Check for hazards
       if (insertSquash == 0)
       {
 
-        //Check if there is a control hazard and update hash table if branch
-        if (EX->type == ti_BRANCH)
+        //Check if there is a control hazard
+        if (EX->type == ti_BRANCH || EX->type == ti_JTYPE)
         {
-          // //Get hash index
-          // hashIndex = EX->PC;
-          // hashIndex = hashIndex >> 3;
-          // hashIndex = hashIndex % HASHSIZE;
-          // //Calculate hash tag
-          // tag = EX->PC;
-          // tag = tag/HASHSIZE;
 
           // No prediction
           if (prediction_type == 0 && EX->Addr == ID->PC) //predicted wrong, branch taken 
@@ -252,8 +334,7 @@ int main(int argc, char **argv)
             foundControlHazard = 1;
           }
 
-
-          //We are not going to have other prediction types so I deleted the code to handle those
+          //We are not going to have other prediction types for this project so I deleted the code to handle those
         }
 
         
