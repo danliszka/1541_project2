@@ -55,12 +55,36 @@ for (k=0 ; k< cp->assoc ; k++)
   return 0;
 }
 
-int cache_access(struct cache_t *cp, unsigned long address, int access_type /*0 for read, 1 for write*/)
+int update_inHigherCache(struct cache_t *cp, unsigned long address, char value)
+{
+  if (value != 0 && value != 1)
+    return 1; //invalid input
+
+  int way, block_address, index ;
+
+  block_address = (address / cp->blocksize);
+  tag = block_address / cp->nsets;
+  index = block_address - (tag * cp->nsets) ;
+
+  for (way = 0 ; i < cp->assoc ; way++)
+  {
+    if (cp->blocks[index][way].tag == tag && cp->blocks[index][way].valid == 1)
+    {
+      cp->blocks[index][i].in_higher_cache = value;
+      return 0;
+    }
+  }
+
+  return 1; //error, block not found
+
+}
+
+int cache_access(struct cache_t *cp, unsigned long address, int access_type /*0 for read, 1 for write*/, struct cache_t *L2cp)
 {
   int i,latency ;
   int block_address ;
-  int index, L2_index ;
-  int tag, L2_tag ;
+  int index;
+  int tag;
   int way ;
   int max ;
 
@@ -83,31 +107,62 @@ int cache_access(struct cache_t *cp, unsigned long address, int access_type /*0 
   /* a cache miss */
   for (way=0 ; way< cp->assoc ; way++)		/* look for an invalid entry */
   {    
-      if (cp->blocks[index][way].valid == 0) {
-  	  latency = latency + cp->mem_latency;	/* account for reading the block from memory*/
-  									/* should instead read from L2, in case you have an L2 */
-      cp->blocks[index][way].valid = 1 ;
-      cp->blocks[index][way].tag = tag ;
-  	  updateLRU(cp, index, way); 
-  	  cp->blocks[index][way].dirty = 0;
-      if(access_type == 1) cp->blocks[index][way].dirty = 1 ;
-  	  return(latency);				/* an invalid entry is available*/
-    }
+      if (cp->blocks[index][way].valid == 0) 
+      {
+    	  latency = latency + cp->mem_latency;	/* account for reading the block from memory*/
+    		/* should instead read from L2, in case you have an L2 */
+        cp->blocks[index][way].valid = 1 ;
+        cp->blocks[index][way].tag = tag ;
+
+        if (cp->cache_type == 2)
+        {
+          cp->blocks[index][way].in_higher_cache = 1;
+        }
+
+    	  updateLRU(cp, index, way); 
+    	  cp->blocks[index][way].dirty = 0;
+        if(access_type == 1) cp->blocks[index][way].dirty = 1 ;
+    	  return(latency);				/* an invalid entry is available*/
+      }
   }
 
   //for when they are all valid, execute below
    max = cp->blocks[index][0].LRU ;	/* find the LRU block */
    way = 0 ;
+   int all_in_higher_cache = 0;
    for (i=1 ; i< cp->assoc ; i++){ 
-    if (cp->blocks[index][i].LRU > max) {
-      max = cp->blocks[index][i].LRU ;
-      way = i ;  
+    if (cp->blocks[index][i].LRU > max) //!!!!!!! -- Still need to figure out what to do if all blocks are in L1 as well as L2
+    {
+      if (cp->cache_type == 2) //if we are in L2, check if this block is also in L1
+      {
+        if (cp->blocks[index][i] == 0) //if its not in L2, then allow it to have the chance to be evicted
+        {
+          max = cp->blocks[index][i].LRU ;
+          way = i ;
+        }
+      }
+      else if (cp->cache_type == 1)
+      {
+        max = cp->blocks[index][i].LRU ;
+        way = i ;
+      }
+
     }
   }
   if (cp->blocks[index][way].dirty == 1)  
   	latency = latency + cp->mem_latency;	/* for writing back the evicted block */
+  
   latency = latency + cp->mem_latency;		/* for reading the block from memory*/
   				/* should instead write to and/or read from L2, in case you have an L2 */
+
+  if (cp->cache_type == 1 && L2cp != NULL) //we are in L1 and there is an L2 available
+  {
+    //since we are in L1 and are about to evict, we need to make sure the same block in L2 does not say its in L1 anymore
+    int error = update_inHigherCache(L2cp, address, 0);
+    if (error)
+      printf("\nERROR: could not find block in L2 cache to update\n");
+  }
+
   cp->blocks[index][way].tag = tag ;
   updateLRU(cp, index, way) ;
   cp->blocks[index][i].dirty = 0 ;
